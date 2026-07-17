@@ -13,53 +13,143 @@ import {
   COLOR_VALUES,
   generateLevel,
   type DragState,
+  type GameMode,
   type MatchPair,
+  type ShapeMatchPair,
 } from "./game-logic";
 
-type GamePhase = "playing" | "celebrating";
-
-type ShapeStyle = CSSProperties & {
-  "--shape-color": string;
+type MatchStyle = CSSProperties & {
+  "--match-color": string;
   "--drag-x"?: string;
   "--drag-y"?: string;
 };
 
-const DISPLAY_NAMES: Record<MatchPair["color"] | MatchPair["shape"], string> = {
+const COLOR_NAMES: Record<MatchPair["color"], string> = {
   coral: "Coral",
+  red: "Red",
+  orange: "Orange",
   gold: "Gold",
-  blue: "Blue",
   green: "Green",
+  teal: "Teal",
+  blue: "Blue",
   purple: "Purple",
+  pink: "Pink",
+};
+
+const SHAPE_NAMES: Record<ShapeMatchPair["shape"], string> = {
   circle: "circle",
   square: "square",
   triangle: "triangle",
   star: "star",
   hexagon: "hexagon",
+  oval: "oval",
+  rectangle: "rectangle",
+  diamond: "diamond",
+  pentagon: "pentagon",
+};
+
+const MODE_COPY: Record<
+  GameMode,
+  { label: string; singular: string; plural: string }
+> = {
+  letters: { label: "Letters", singular: "letter", plural: "letters" },
+  numbers: { label: "Numbers", singular: "number", plural: "numbers" },
+  shapes: { label: "Shapes", singular: "shape", plural: "shapes" },
 };
 
 function pairLabel(pair: MatchPair) {
-  return `${DISPLAY_NAMES[pair.color]} ${DISPLAY_NAMES[pair.shape]}`;
+  const color = COLOR_NAMES[pair.color];
+
+  if (pair.mode === "shapes") {
+    return `${color} ${SHAPE_NAMES[pair.shape]}`;
+  }
+
+  return `${color} ${MODE_COPY[pair.mode].singular} ${pair.glyph}`;
 }
 
-function ShapeVisual({ pair, container }: { pair: MatchPair; container?: boolean }) {
+function ShapeVisual({ pair, target }: { pair: ShapeMatchPair; target?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`shape-visual shape-${pair.shape} size-${pair.size} ${container ? "shape-container" : "shape-piece"}`}
+      className={`shape-visual shape-${pair.shape} size-${pair.size} ${target ? "shape-target" : "shape-piece"}`}
     >
-      {container ? <span className="shape-container-inner" /> : null}
+      {target ? <span className="shape-target-inner" /> : null}
     </span>
   );
 }
 
-export default function Game() {
+function MatchVisual({ pair, target }: { pair: MatchPair; target?: boolean }) {
+  if (pair.mode === "shapes") {
+    return <ShapeVisual pair={pair} target={target} />;
+  }
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`glyph-visual size-${pair.size} ${target ? "glyph-target" : "glyph-piece"}`}
+    >
+      {pair.glyph}
+    </span>
+  );
+}
+
+function ModePreview({ mode }: { mode: GameMode }) {
+  if (mode === "shapes") {
+    return (
+      <span className="mode-preview mode-preview-shapes" aria-hidden="true">
+        <span className="preview-shape preview-circle" />
+        <span className="preview-shape preview-triangle" />
+        <span className="preview-shape preview-star" />
+      </span>
+    );
+  }
+
+  const glyphs = mode === "letters" ? ["A", "B", "C"] : ["0", "1", "2"];
+  return (
+    <span className="mode-preview mode-preview-glyphs" aria-hidden="true">
+      {glyphs.map((glyph) => (
+        <span key={glyph}>{glyph}</span>
+      ))}
+    </span>
+  );
+}
+
+function ModeSelector({ onSelect }: { onSelect: (mode: GameMode) => void }) {
+  const modes: GameMode[] = ["letters", "numbers", "shapes"];
+
+  return (
+    <main className="mode-shell">
+      <header className="mode-heading">
+        <h1>Baby Colors</h1>
+        <p>Choose a mode</p>
+      </header>
+
+      <div className="mode-grid" role="group" aria-label="Game modes">
+        {modes.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={`mode-card mode-${mode}`}
+            aria-label={`Play ${MODE_COPY[mode].label} mode`}
+            onClick={() => onSelect(mode)}
+          >
+            <ModePreview mode={mode} />
+            <strong>{MODE_COPY[mode].label}</strong>
+          </button>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function MatchingGame({ mode }: { mode: GameMode }) {
+  const modeCopy = MODE_COPY[mode];
   const [level, setLevel] = useState(1);
-  const [config, setConfig] = useState(() => generateLevel(1));
+  const [config, setConfig] = useState(() => generateLevel(mode, 1));
   const [placed, setPlaced] = useState<Set<string>>(() => new Set());
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [phase, setPhase] = useState<GamePhase>("playing");
   const dragRef = useRef<DragState | null>(null);
 
   const pairsById = useMemo(
@@ -68,34 +158,29 @@ export default function Game() {
   );
 
   const pieces = config.pieceOrder.map((id) => pairsById.get(id)!);
-  const containers = config.containerOrder.map((id) => pairsById.get(id)!);
+  const targets = config.containerOrder.map((id) => pairsById.get(id)!);
+  const isComplete = placed.size === config.pairs.length;
 
   useEffect(() => {
-    if (phase === "playing" && placed.size === config.pairs.length) {
-      setPhase("celebrating");
-      return;
-    }
-
-    if (phase !== "celebrating") {
+    if (!isComplete) {
       return;
     }
 
     const timer = window.setTimeout(() => {
       const nextLevel = level + 1;
       setLevel(nextLevel);
-      setConfig(generateLevel(nextLevel));
+      setConfig(generateLevel(mode, nextLevel));
       setPlaced(new Set());
       setSelectedPairId(null);
       setHoveredTargetId(null);
-      setPhase("playing");
     }, 800);
 
     return () => window.clearTimeout(timer);
-  }, [config.pairs.length, level, phase, placed.size]);
+  }, [isComplete, level, mode]);
 
   function isPointInsideTarget(pairId: string, clientX: number, clientY: number) {
     const element = document.querySelector<HTMLElement>(
-      `[data-container-id="${pairId}"]`,
+      `[data-target-id="${pairId}"]`,
     );
 
     if (!element) {
@@ -112,12 +197,8 @@ export default function Game() {
     );
   }
 
-  function placePair(pairId: string, containerId: string) {
-    if (
-      phase !== "playing" ||
-      pairId !== containerId ||
-      placed.has(pairId)
-    ) {
+  function placePair(pairId: string, targetId: string) {
+    if (isComplete || pairId !== targetId || placed.has(pairId)) {
       return false;
     }
 
@@ -131,7 +212,7 @@ export default function Game() {
   }
 
   function beginDrag(event: PointerEvent<HTMLButtonElement>, pairId: string) {
-    if (phase !== "playing" || placed.has(pairId)) {
+    if (isComplete || placed.has(pairId)) {
       return;
     }
 
@@ -198,23 +279,28 @@ export default function Game() {
     }
 
     event.preventDefault();
-    if (phase === "playing" && !placed.has(pairId)) {
+    if (!isComplete && !placed.has(pairId)) {
       setSelectedPairId(pairId);
     }
   }
 
   return (
     <main className="game-shell">
-      <h1 className="visually-hidden">Baby Colors matching game</h1>
+      <h1 className="visually-hidden">
+        Baby Colors {modeCopy.label} matching game
+      </h1>
 
-      <header className="game-header" aria-label={`Level ${level}`}>
+      <header
+        className="game-header"
+        aria-label={`${modeCopy.label} mode, level ${level}`}
+      >
         <div className="level-badge">
           <span>Level</span>
           <strong>{level}</strong>
         </div>
         <div
           className="progress-dots"
-          aria-label={`${placed.size} of ${config.pairs.length} shapes matched`}
+          aria-label={`${placed.size} of ${config.pairs.length} ${modeCopy.plural} matched`}
         >
           {config.pairs.map((pair) => (
             <span
@@ -225,21 +311,21 @@ export default function Game() {
         </div>
       </header>
 
-      <section className="game-board" aria-label="Shape matching play area">
-        <div className="play-zone target-zone" aria-label="Matching containers">
-          <div className="shape-grid">
-            {containers.map((pair) => {
+      <section className="game-board" aria-label={`${modeCopy.label} matching play area`}>
+        <div className="play-zone target-zone" aria-label="Matching targets">
+          <div className="match-grid">
+            {targets.map((pair) => {
               const isPlaced = placed.has(pair.id);
               const isHovered = hoveredTargetId === pair.id;
               return (
                 <button
                   key={pair.id}
                   type="button"
-                  className={`shape-button target-button ${isPlaced ? "is-placed" : ""} ${isHovered ? "is-hovered" : ""}`}
-                  style={{ "--shape-color": COLOR_VALUES[pair.color] } as ShapeStyle}
-                  data-container-id={pair.id}
-                  aria-label={`${pairLabel(pair)} container${isPlaced ? ", matched" : ""}`}
-                  disabled={isPlaced || phase !== "playing"}
+                  className={`match-button target-button ${isPlaced ? "is-placed" : ""} ${isHovered ? "is-hovered" : ""}`}
+                  style={{ "--match-color": COLOR_VALUES[pair.color] } as MatchStyle}
+                  data-target-id={pair.id}
+                  aria-label={`${pairLabel(pair)} target${isPlaced ? ", matched" : ""}`}
+                  disabled={isPlaced || isComplete}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") {
                       return;
@@ -255,7 +341,7 @@ export default function Game() {
                     }
                   }}
                 >
-                  <ShapeVisual pair={pair} container />
+                  <MatchVisual pair={pair} target />
                 </button>
               );
             })}
@@ -266,14 +352,14 @@ export default function Game() {
           <span />
         </div>
 
-        <div className="play-zone piece-zone" aria-label="Shapes to match">
-          <div className="shape-grid">
+        <div className="play-zone piece-zone" aria-label={`${modeCopy.label} to match`}>
+          <div className="match-grid">
             {pieces.map((pair) => {
               const isPlaced = placed.has(pair.id);
               const isDragging = drag?.pairId === pair.id;
               const isSelected = selectedPairId === pair.id && !isDragging;
-              const style: ShapeStyle = {
-                "--shape-color": COLOR_VALUES[pair.color],
+              const style: MatchStyle = {
+                "--match-color": COLOR_VALUES[pair.color],
                 "--drag-x": isDragging ? `${drag.x}px` : "0px",
                 "--drag-y": isDragging ? `${drag.y}px` : "0px",
               };
@@ -282,11 +368,11 @@ export default function Game() {
                 <button
                   key={pair.id}
                   type="button"
-                  className={`shape-button piece-button ${isPlaced ? "is-placed" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""}`}
+                  className={`match-button piece-button ${isPlaced ? "is-placed" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""}`}
                   style={style}
                   aria-label={`${pairLabel(pair)}${isSelected ? ", selected" : ""}`}
                   aria-pressed={isSelected}
-                  disabled={isPlaced || phase !== "playing"}
+                  disabled={isPlaced || isComplete}
                   onKeyDown={(event) => selectWithKeyboard(event, pair.id)}
                   onPointerDown={(event) => beginDrag(event, pair.id)}
                   onPointerMove={moveDrag}
@@ -294,7 +380,7 @@ export default function Game() {
                   onPointerCancel={(event) => finishDrag(event, true)}
                   onLostPointerCapture={(event) => finishDrag(event, true)}
                 >
-                  <ShapeVisual pair={pair} />
+                  <MatchVisual pair={pair} />
                 </button>
               );
             })}
@@ -302,16 +388,26 @@ export default function Game() {
         </div>
 
         <div
-          className={`level-complete ${phase === "celebrating" ? "is-visible" : ""}`}
+          className={`level-complete ${isComplete ? "is-visible" : ""}`}
           role="status"
           aria-live="polite"
         >
           <span aria-hidden="true">✓</span>
           <span className="visually-hidden">
-            {phase === "celebrating" ? `Level ${level} complete` : ""}
+            {isComplete ? `Level ${level} complete` : ""}
           </span>
         </div>
       </section>
     </main>
+  );
+}
+
+export default function Game() {
+  const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
+
+  return selectedMode ? (
+    <MatchingGame mode={selectedMode} />
+  ) : (
+    <ModeSelector onSelect={setSelectedMode} />
   );
 }

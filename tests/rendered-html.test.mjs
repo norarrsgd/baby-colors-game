@@ -23,26 +23,35 @@ async function render() {
   );
 }
 
-test("server-renders the Baby Colors game", async () => {
+test("server-renders the launch-only mode selector", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
   assert.match(html, /<title>Baby Colors<\/title>/i);
-  assert.match(html, /Baby Colors matching game/);
-  assert.match(html, /Level/);
-  assert.match(html, /Matching containers/);
-  assert.match(html, /Shapes to match/);
-  assert.match(html, /1 of 1|0 of 1/);
+  assert.match(html, />Baby Colors</);
+  assert.match(html, />Choose a mode</);
+
+  const lettersIndex = html.indexOf("Play Letters mode");
+  const numbersIndex = html.indexOf("Play Numbers mode");
+  const shapesIndex = html.indexOf("Play Shapes mode");
+  assert.ok(lettersIndex >= 0);
+  assert.ok(numbersIndex > lettersIndex);
+  assert.ok(shapesIndex > numbersIndex);
+  assert.doesNotMatch(html, /matching play area|Matching targets|Level 1/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("keeps the game session-only and silent", async () => {
+test("keeps every game mode session-only, silent, and accessible", async () => {
   const gameSource = await readFile(new URL("../app/GameBoard.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(gameSource, /localStorage|sessionStorage|document\.cookie/);
   assert.doesNotMatch(gameSource, /new Audio|<audio|speechSynthesis/);
   assert.match(gameSource, /onPointerDown/);
   assert.match(gameSource, /onPointerCancel/);
   assert.match(gameSource, /onKeyDown/);
+  assert.match(gameSource, /const modes: GameMode\[\] = \["letters", "numbers", "shapes"\]/);
+  assert.match(gameSource, /aria-label=\{`Play \$\{MODE_COPY\[mode\]\.label\} mode`\}/);
+  assert.match(gameSource, /glyph-visual/);
+  assert.match(gameSource, /data-target-id/);
 });

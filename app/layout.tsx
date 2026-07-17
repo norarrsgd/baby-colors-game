@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Baby Colors",
-  description: "A gentle shape and color matching game for little learners.",
+  description: "A gentle shapes, letters, and numbers matching game for little learners.",
 };
 
 export const viewport: Viewport = {
