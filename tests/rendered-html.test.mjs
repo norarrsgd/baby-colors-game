@@ -43,10 +43,21 @@ test("server-renders the launch-only mode selector", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("keeps every game mode session-only, silent, and accessible", async () => {
+test("keeps every game mode session-only, audio-enabled, and accessible", async () => {
   const gameSource = await readFile(new URL("../app/GameBoard.tsx", import.meta.url), "utf8");
+  const audioSource = await readFile(
+    new URL("../app/use-game-audio.ts", import.meta.url),
+    "utf8",
+  );
+
   assert.doesNotMatch(gameSource, /localStorage|sessionStorage|document\.cookie/);
-  assert.doesNotMatch(gameSource, /new Audio|<audio|speechSynthesis/);
+  assert.doesNotMatch(audioSource, /localStorage|sessionStorage|document\.cookie|speechSynthesis/);
+  assert.match(audioSource, /new Audio/);
+  assert.match(audioSource, /document\.hidden/);
+  assert.match(gameSource, /aria-label=\{soundEnabled \? "Mute sound" : "Turn sound on"\}/);
+  assert.match(gameSource, /aria-pressed=\{soundEnabled\}/);
+  assert.match(gameSource, /attemptMatch/);
+  assert.match(gameSource, /getTargetAtPoint/);
   assert.match(gameSource, /onPointerDown/);
   assert.match(gameSource, /onPointerCancel/);
   assert.match(gameSource, /onKeyDown/);

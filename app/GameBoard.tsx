@@ -17,6 +17,8 @@ import {
   type MatchPair,
   type ShapeMatchPair,
 } from "./game-logic";
+import type { MatchResult } from "./audio-assets";
+import { useGameAudio } from "./use-game-audio";
 
 type MatchStyle = CSSProperties & {
   "--match-color": string;
@@ -142,7 +144,19 @@ function ModeSelector({ onSelect }: { onSelect: (mode: GameMode) => void }) {
   );
 }
 
-function MatchingGame({ mode }: { mode: GameMode }) {
+interface MatchingGameProps {
+  mode: GameMode;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
+  onMatchResult: (mode: GameMode, result: MatchResult) => void;
+}
+
+function MatchingGame({
+  mode,
+  soundEnabled,
+  onToggleSound,
+  onMatchResult,
+}: MatchingGameProps) {
   const modeCopy = MODE_COPY[mode];
   const [level, setLevel] = useState(1);
   const [config, setConfig] = useState(() => generateLevel(mode, 1));
@@ -178,27 +192,59 @@ function MatchingGame({ mode }: { mode: GameMode }) {
     return () => window.clearTimeout(timer);
   }, [isComplete, level, mode]);
 
-  function isPointInsideTarget(pairId: string, clientX: number, clientY: number) {
-    const element = document.querySelector<HTMLElement>(
-      `[data-target-id="${pairId}"]`,
-    );
+  function getTargetAtPoint(clientX: number, clientY: number) {
+    const elements = document.querySelectorAll<HTMLElement>("[data-target-id]");
+    const generousPadding = 18;
+    let nearestTargetId: string | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
 
-    if (!element) {
+    for (const element of elements) {
+      const targetId = element.dataset.targetId;
+      if (!targetId) {
+        continue;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const isInside =
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom;
+
+      if (isInside) {
+        return targetId;
+      }
+
+      const isInsidePaddedArea =
+        clientX >= rect.left - generousPadding &&
+        clientX <= rect.right + generousPadding &&
+        clientY >= rect.top - generousPadding &&
+        clientY <= rect.bottom + generousPadding;
+
+      if (!isInsidePaddedArea) {
+        continue;
+      }
+
+      const distanceX = Math.max(rect.left - clientX, 0, clientX - rect.right);
+      const distanceY = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
+      const distance = Math.hypot(distanceX, distanceY);
+
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestTargetId = targetId;
+      }
+    }
+
+    return nearestTargetId;
+  }
+
+  function attemptMatch(pairId: string, targetId: string) {
+    if (isComplete || placed.has(pairId)) {
       return false;
     }
 
-    const rect = element.getBoundingClientRect();
-    const generousPadding = 18;
-    return (
-      clientX >= rect.left - generousPadding &&
-      clientX <= rect.right + generousPadding &&
-      clientY >= rect.top - generousPadding &&
-      clientY <= rect.bottom + generousPadding
-    );
-  }
-
-  function placePair(pairId: string, targetId: string) {
-    if (isComplete || pairId !== targetId || placed.has(pairId)) {
+    if (pairId !== targetId) {
+      onMatchResult(mode, "mismatch");
       return false;
     }
 
@@ -208,6 +254,7 @@ function MatchingGame({ mode }: { mode: GameMode }) {
       return next;
     });
     setSelectedPairId(null);
+    onMatchResult(mode, "correct");
     return true;
   }
 
@@ -247,11 +294,8 @@ function MatchingGame({ mode }: { mode: GameMode }) {
     };
     dragRef.current = nextDrag;
     setDrag(nextDrag);
-    setHoveredTargetId(
-      isPointInsideTarget(current.pairId, event.clientX, event.clientY)
-        ? current.pairId
-        : null,
-    );
+    const targetId = getTargetAtPoint(event.clientX, event.clientY);
+    setHoveredTargetId(targetId === current.pairId ? targetId : null);
   }
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
@@ -260,8 +304,11 @@ function MatchingGame({ mode }: { mode: GameMode }) {
       return;
     }
 
-    if (!cancelled && isPointInsideTarget(current.pairId, event.clientX, event.clientY)) {
-      placePair(current.pairId, current.pairId);
+    if (!cancelled) {
+      const targetId = getTargetAtPoint(event.clientX, event.clientY);
+      if (targetId) {
+        attemptMatch(current.pairId, targetId);
+      }
     }
 
     dragRef.current = null;
@@ -309,6 +356,15 @@ function MatchingGame({ mode }: { mode: GameMode }) {
             />
           ))}
         </div>
+        <button
+          type="button"
+          className="sound-toggle"
+          aria-label={soundEnabled ? "Mute sound" : "Turn sound on"}
+          aria-pressed={soundEnabled}
+          onClick={onToggleSound}
+        >
+          <span aria-hidden="true">{soundEnabled ? "🔊" : "🔇"}</span>
+        </button>
       </header>
 
       <section className="game-board" aria-label={`${modeCopy.label} matching play area`}>
@@ -332,12 +388,12 @@ function MatchingGame({ mode }: { mode: GameMode }) {
                     }
                     event.preventDefault();
                     if (selectedPairId) {
-                      placePair(selectedPairId, pair.id);
+                      attemptMatch(selectedPairId, pair.id);
                     }
                   }}
                   onClick={() => {
                     if (selectedPairId) {
-                      placePair(selectedPairId, pair.id);
+                      attemptMatch(selectedPairId, pair.id);
                     }
                   }}
                 >
@@ -404,10 +460,26 @@ function MatchingGame({ mode }: { mode: GameMode }) {
 
 export default function Game() {
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
+  const {
+    soundEnabled,
+    startMode,
+    playMatchResult,
+    toggleSound,
+  } = useGameAudio();
 
   return selectedMode ? (
-    <MatchingGame mode={selectedMode} />
+    <MatchingGame
+      mode={selectedMode}
+      soundEnabled={soundEnabled}
+      onToggleSound={toggleSound}
+      onMatchResult={playMatchResult}
+    />
   ) : (
-    <ModeSelector onSelect={setSelectedMode} />
+    <ModeSelector
+      onSelect={(mode) => {
+        startMode(mode);
+        setSelectedMode(mode);
+      }}
+    />
   );
 }

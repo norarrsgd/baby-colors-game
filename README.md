@@ -1,6 +1,6 @@
 # Baby Colors
 
-Baby Colors is a quiet matching game designed for little learners. It opens
+Baby Colors is a gentle matching game designed for little learners. It opens
 with three game modes:
 
 - **Letters** matches uppercase letters from A through Z.
@@ -9,8 +9,11 @@ with three game modes:
 
 Each mode begins with one pair and gradually grows to five. Children can drag a
 piece to its target or select a piece and target using touch, mouse, or keyboard.
-Progress lasts only for the current page session, and the game does not use
-sound, accounts, cookies, or browser storage.
+Soft music-box background music begins after a mode is selected. Correct and
+mismatched targets have short instrumental feedback sounds with subtle
+mode-specific variations. A sound button in the game header controls all audio.
+Progress and sound preferences last only for the current page session, and the
+game does not use accounts, cookies, or browser storage.
 
 ## Requirements
 
@@ -37,6 +40,12 @@ Run the code-quality checks separately:
 
 ```bash
 npm run lint
+```
+
+Regenerate the committed audio assets without external tools or dependencies:
+
+```bash
+npm run audio:generate
 ```
 
 To create only the production build:
@@ -77,6 +86,8 @@ docker compose down
 ## Project Structure
 
 - `app/GameBoard.tsx` contains mode selection and matching interactions.
+- `app/use-game-audio.ts` contains session-only music and feedback playback.
 - `app/game-logic.ts` contains deterministic level and difficulty generation.
 - `app/globals.css` contains the responsive game visuals.
+- `scripts/generate-audio.mjs` deterministically creates the committed WAV files.
 - `tests/` contains level-generation and rendered-page checks.
