@@ -45,6 +45,35 @@ To create only the production build:
 npm run build
 ```
 
+## Docker Deployment
+
+Build the production image and start the app in the background:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://<server-ip>:9707` in a browser. Check the container and follow its
+logs with:
+
+```bash
+docker compose ps
+docker compose logs -f baby-colors
+```
+
+After updating the repository checkout, rebuild and replace the running
+container:
+
+```bash
+docker compose up -d --build
+```
+
+Stop and remove the deployment with:
+
+```bash
+docker compose down
+```
+
 ## Project Structure
 
 - `app/GameBoard.tsx` contains mode selection and matching interactions.
