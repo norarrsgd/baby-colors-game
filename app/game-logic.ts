@@ -1,17 +1,88 @@
-export type ShapeKind = "circle" | "square" | "triangle" | "star" | "hexagon";
+export type GameMode = "letters" | "numbers" | "shapes";
 
-export type ColorId = "coral" | "gold" | "blue" | "green" | "purple";
+export type ShapeKind =
+  | "circle"
+  | "square"
+  | "triangle"
+  | "star"
+  | "hexagon"
+  | "oval"
+  | "rectangle"
+  | "diamond"
+  | "pentagon";
+
+export type ColorId =
+  | "coral"
+  | "red"
+  | "orange"
+  | "gold"
+  | "green"
+  | "teal"
+  | "blue"
+  | "purple"
+  | "pink";
 
 export type SizeBand = "small" | "medium" | "large";
 
-export interface MatchPair {
+export const LETTERS = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z",
+] as const;
+
+export const NUMBERS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
+
+export type LetterGlyph = (typeof LETTERS)[number];
+export type NumberGlyph = (typeof NUMBERS)[number];
+
+interface MatchPairBase {
   id: string;
-  shape: ShapeKind;
   color: ColorId;
   size: SizeBand;
 }
 
+export interface ShapeMatchPair extends MatchPairBase {
+  mode: "shapes";
+  shape: ShapeKind;
+}
+
+export interface LetterMatchPair extends MatchPairBase {
+  mode: "letters";
+  glyph: LetterGlyph;
+}
+
+export interface NumberMatchPair extends MatchPairBase {
+  mode: "numbers";
+  glyph: NumberGlyph;
+}
+
+export type MatchPair = ShapeMatchPair | LetterMatchPair | NumberMatchPair;
+
 export interface LevelConfig {
+  mode: GameMode;
   level: number;
   pairs: MatchPair[];
   pieceOrder: string[];
@@ -40,22 +111,34 @@ export const SHAPES: readonly ShapeKind[] = [
   "triangle",
   "star",
   "hexagon",
+  "oval",
+  "rectangle",
+  "diamond",
+  "pentagon",
 ];
 
 export const COLORS: readonly ColorId[] = [
   "coral",
+  "red",
+  "orange",
   "gold",
-  "blue",
   "green",
+  "teal",
+  "blue",
   "purple",
+  "pink",
 ];
 
 export const COLOR_VALUES: Record<ColorId, string> = {
   coral: "#e97868",
+  red: "#d96b67",
+  orange: "#e59a55",
   gold: "#e4af3d",
-  blue: "#5e9fca",
   green: "#6ead83",
+  teal: "#67a9a5",
+  blue: "#5e9fca",
   purple: "#967fc2",
+  pink: "#d88fac",
 };
 
 export function getDifficulty(level: number): Difficulty {
@@ -148,9 +231,7 @@ function shuffled<T>(values: readonly T[], random: () => number): T[] {
   return result;
 }
 
-export function generateLevel(level: number): LevelConfig {
-  const safeLevel = Math.max(1, Math.floor(level));
-  const difficulty = getDifficulty(safeLevel);
+function generateShapeLevel(safeLevel: number, difficulty: Difficulty): LevelConfig {
   const random = createRandom(safeLevel * 2654435761);
   const shapes = shuffled(SHAPES, random).slice(0, difficulty.pairCount);
   const colors = shuffled(COLORS, random).slice(0, difficulty.pairCount);
@@ -164,19 +245,75 @@ export function generateLevel(level: number): LevelConfig {
     }
   }
 
-  const pairs = shapes.map((shape, index): MatchPair => ({
+  const pairs = shapes.map((shape, index): ShapeMatchPair => ({
     id: `pair-${safeLevel}-${index}`,
+    mode: "shapes",
     shape,
     color: colors[index],
     size: difficulty.sizes[Math.floor(random() * difficulty.sizes.length)],
   }));
 
+  return finishLevel("shapes", safeLevel, pairs, random);
+}
+
+function generateGlyphLevel(
+  mode: "letters" | "numbers",
+  safeLevel: number,
+  difficulty: Difficulty,
+): LevelConfig {
+  const modeSalt = mode === "letters" ? 0x9e3779b9 : 0x85ebca6b;
+  const random = createRandom(safeLevel * 2654435761 + modeSalt);
+  const glyphs = shuffled(mode === "letters" ? LETTERS : NUMBERS, random).slice(
+    0,
+    difficulty.pairCount,
+  );
+  const colors = shuffled(COLORS, random).slice(0, difficulty.pairCount);
+
+  if (difficulty.repeatedAxis && difficulty.pairCount > 1) {
+    colors[difficulty.pairCount - 1] = colors[0];
+  }
+
+  const pairs: LetterMatchPair[] | NumberMatchPair[] = mode === "letters"
+    ? (glyphs as LetterGlyph[]).map((glyph, index): LetterMatchPair => ({
+        id: `${mode}-pair-${safeLevel}-${index}`,
+        mode,
+        glyph,
+        color: colors[index],
+        size: difficulty.sizes[Math.floor(random() * difficulty.sizes.length)],
+      }))
+    : (glyphs as NumberGlyph[]).map((glyph, index): NumberMatchPair => ({
+        id: `${mode}-pair-${safeLevel}-${index}`,
+        mode,
+        glyph,
+        color: colors[index],
+        size: difficulty.sizes[Math.floor(random() * difficulty.sizes.length)],
+      }));
+
+  return finishLevel(mode, safeLevel, pairs, random);
+}
+
+function finishLevel(
+  mode: GameMode,
+  level: number,
+  pairs: MatchPair[],
+  random: () => number,
+): LevelConfig {
   const pairIds = pairs.map((pair) => pair.id);
 
   return {
-    level: safeLevel,
+    mode,
+    level,
     pairs,
     pieceOrder: shuffled(pairIds, random),
     containerOrder: shuffled(pairIds, random),
   };
+}
+
+export function generateLevel(mode: GameMode, level: number): LevelConfig {
+  const safeLevel = Math.max(1, Math.floor(level));
+  const difficulty = getDifficulty(safeLevel);
+
+  return mode === "shapes"
+    ? generateShapeLevel(safeLevel, difficulty)
+    : generateGlyphLevel(mode, safeLevel, difficulty);
 }
