@@ -45,6 +45,7 @@ test("server-renders the launch-only mode selector", async () => {
 
 test("keeps every game mode session-only, audio-enabled, and accessible", async () => {
   const gameSource = await readFile(new URL("../app/GameBoard.tsx", import.meta.url), "utf8");
+  const stylesSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const audioSource = await readFile(
     new URL("../app/use-game-audio.ts", import.meta.url),
     "utf8",
@@ -57,7 +58,7 @@ test("keeps every game mode session-only, audio-enabled, and accessible", async 
   assert.match(gameSource, /aria-label=\{soundEnabled \? "Mute sound" : "Turn sound on"\}/);
   assert.match(gameSource, /aria-pressed=\{soundEnabled\}/);
   assert.match(gameSource, /attemptMatch/);
-  assert.match(gameSource, /getTargetAtPoint/);
+  assert.match(gameSource, /getTargetForDrag/);
   assert.match(gameSource, /onPointerDown/);
   assert.match(gameSource, /onPointerCancel/);
   assert.match(gameSource, /onKeyDown/);
@@ -65,4 +66,26 @@ test("keeps every game mode session-only, audio-enabled, and accessible", async 
   assert.match(gameSource, /aria-label=\{`Play \$\{MODE_COPY\[mode\]\.label\} mode`\}/);
   assert.match(gameSource, /glyph-visual/);
   assert.match(gameSource, /data-target-id/);
+  assert.match(gameSource, /BOARD_SLOT_COUNT = 10/);
+  assert.match(gameSource, /className="board-canvas"/);
+  assert.doesNotMatch(gameSource, /board-divider|target-zone|piece-zone/);
+  const moveDragSource = gameSource.slice(
+    gameSource.indexOf("function moveDrag"),
+    gameSource.indexOf("function finishDrag"),
+  );
+  assert.match(moveDragSource, /getTargetForDrag\(nextDrag\)/);
+  assert.doesNotMatch(moveDragSource, /attemptMatch/);
+  const finishDragSource = gameSource.slice(
+    gameSource.indexOf("function finishDrag"),
+    gameSource.indexOf("function selectWithKeyboard"),
+  );
+  assert.match(finishDragSource, /getTargetForBounds\(draggedVisual\.getBoundingClientRect\(\)\)/);
+  assert.match(finishDragSource, /attemptMatch\(current\.pairId, targetId\)/);
+  assert.match(gameSource, /MIN_MATCH_OVERLAP_RATIO = 0\.7/);
+  assert.doesNotMatch(gameSource, /generousPadding|getTargetAtPoint/);
+  assert.match(gameSource, /className="match-celebration"/);
+  assert.match(stylesSource, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(stylesSource, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(stylesSource, /--shape-size: clamp\(108px, 27vw, 171px\)/);
+  assert.match(stylesSource, /@keyframes answer-zoom/);
 });

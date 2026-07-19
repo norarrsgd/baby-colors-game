@@ -12,9 +12,11 @@ import {
 import {
   COLOR_VALUES,
   generateLevel,
+  getRectOverlapRatio,
   type DragState,
   type GameMode,
   type MatchPair,
+  type RectBounds,
   type ShapeMatchPair,
 } from "./game-logic";
 import type { MatchResult } from "./audio-assets";
@@ -25,6 +27,29 @@ type MatchStyle = CSSProperties & {
   "--drag-x"?: string;
   "--drag-y"?: string;
 };
+
+const BOARD_SLOT_COUNT = 10;
+const MIN_MATCH_OVERLAP_RATIO = 0.7;
+const MATCH_VISUAL_SELECTOR = ".shape-visual, .glyph-visual";
+
+function createBoardSlotMap(
+  targetIds: readonly string[],
+  pieceIds: readonly string[],
+) {
+  const slots = Array.from({ length: BOARD_SLOT_COUNT }, (_, index) => index);
+
+  for (let index = slots.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [slots[index], slots[swapIndex]] = [slots[swapIndex], slots[index]];
+  }
+
+  const itemKeys = [
+    ...targetIds.map((id) => `target:${id}`),
+    ...pieceIds.map((id) => `piece:${id}`),
+  ];
+
+  return new Map(itemKeys.map((key, index) => [key, slots[index]]));
+}
 
 const COLOR_NAMES: Record<MatchPair["color"], string> = {
   coral: "Coral",
@@ -164,7 +189,12 @@ function MatchingGame({
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [celebration, setCelebration] = useState<{
+    pair: MatchPair;
+    sequence: number;
+  } | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const celebrationSequenceRef = useRef(0);
 
   const pairsById = useMemo(
     () => new Map(config.pairs.map((pair) => [pair.id, pair])),
@@ -173,7 +203,20 @@ function MatchingGame({
 
   const pieces = config.pieceOrder.map((id) => pairsById.get(id)!);
   const targets = config.containerOrder.map((id) => pairsById.get(id)!);
+  const boardSlots = useMemo(
+    () => createBoardSlotMap(config.containerOrder, config.pieceOrder),
+    [config],
+  );
   const isComplete = placed.size === config.pairs.length;
+
+  useEffect(() => {
+    if (!celebration) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setCelebration(null), 720);
+    return () => window.clearTimeout(timer);
+  }, [celebration]);
 
   useEffect(() => {
     if (!isComplete) {
@@ -187,55 +230,47 @@ function MatchingGame({
       setPlaced(new Set());
       setSelectedPairId(null);
       setHoveredTargetId(null);
-    }, 800);
+    }, 950);
 
     return () => window.clearTimeout(timer);
   }, [isComplete, level, mode]);
 
-  function getTargetAtPoint(clientX: number, clientY: number) {
+  function getTargetForBounds(draggedBounds: RectBounds) {
     const elements = document.querySelectorAll<HTMLElement>("[data-target-id]");
-    const generousPadding = 18;
     let nearestTargetId: string | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
+    let greatestOverlap = 0;
 
     for (const element of elements) {
       const targetId = element.dataset.targetId;
-      if (!targetId) {
+      if (!targetId || element.matches(":disabled")) {
         continue;
       }
 
-      const rect = element.getBoundingClientRect();
-      const isInside =
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom;
-
-      if (isInside) {
-        return targetId;
-      }
-
-      const isInsidePaddedArea =
-        clientX >= rect.left - generousPadding &&
-        clientX <= rect.right + generousPadding &&
-        clientY >= rect.top - generousPadding &&
-        clientY <= rect.bottom + generousPadding;
-
-      if (!isInsidePaddedArea) {
+      const targetVisual = element.querySelector<HTMLElement>(MATCH_VISUAL_SELECTOR);
+      if (!targetVisual) {
         continue;
       }
 
-      const distanceX = Math.max(rect.left - clientX, 0, clientX - rect.right);
-      const distanceY = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
-      const distance = Math.hypot(distanceX, distanceY);
-
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
+      const overlap = getRectOverlapRatio(
+        draggedBounds,
+        targetVisual.getBoundingClientRect(),
+      );
+      if (overlap >= MIN_MATCH_OVERLAP_RATIO && overlap > greatestOverlap) {
+        greatestOverlap = overlap;
         nearestTargetId = targetId;
       }
     }
 
     return nearestTargetId;
+  }
+
+  function getTargetForDrag(current: DragState) {
+    return getTargetForBounds({
+      left: current.visualBounds.left + current.x,
+      right: current.visualBounds.right + current.x,
+      top: current.visualBounds.top + current.y,
+      bottom: current.visualBounds.bottom + current.y,
+    });
   }
 
   function attemptMatch(pairId: string, targetId: string) {
@@ -254,6 +289,14 @@ function MatchingGame({
       return next;
     });
     setSelectedPairId(null);
+    const matchedPair = pairsById.get(pairId);
+    if (matchedPair) {
+      celebrationSequenceRef.current += 1;
+      setCelebration({
+        pair: matchedPair,
+        sequence: celebrationSequenceRef.current,
+      });
+    }
     onMatchResult(mode, "correct");
     return true;
   }
@@ -268,6 +311,10 @@ function MatchingGame({
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    const draggedVisual =
+      event.currentTarget.querySelector<HTMLElement>(MATCH_VISUAL_SELECTOR) ??
+      event.currentTarget;
+    const visualRect = draggedVisual.getBoundingClientRect();
     const nextDrag: DragState = {
       pairId,
       pointerId: event.pointerId,
@@ -275,6 +322,12 @@ function MatchingGame({
       startY: event.clientY,
       x: 0,
       y: 0,
+      visualBounds: {
+        left: visualRect.left,
+        right: visualRect.right,
+        top: visualRect.top,
+        bottom: visualRect.bottom,
+      },
     };
     dragRef.current = nextDrag;
     setDrag(nextDrag);
@@ -292,10 +345,10 @@ function MatchingGame({
       x: event.clientX - current.startX,
       y: event.clientY - current.startY,
     };
+    const targetId = getTargetForDrag(nextDrag);
     dragRef.current = nextDrag;
     setDrag(nextDrag);
-    const targetId = getTargetAtPoint(event.clientX, event.clientY);
-    setHoveredTargetId(targetId === current.pairId ? targetId : null);
+    setHoveredTargetId(targetId);
   }
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
@@ -305,7 +358,10 @@ function MatchingGame({
     }
 
     if (!cancelled) {
-      const targetId = getTargetAtPoint(event.clientX, event.clientY);
+      const draggedVisual =
+        event.currentTarget.querySelector<HTMLElement>(MATCH_VISUAL_SELECTOR) ??
+        event.currentTarget;
+      const targetId = getTargetForBounds(draggedVisual.getBoundingClientRect());
       if (targetId) {
         attemptMatch(current.pairId, targetId);
       }
@@ -368,90 +424,90 @@ function MatchingGame({
       </header>
 
       <section className="game-board" aria-label={`${modeCopy.label} matching play area`}>
-        <div className="play-zone target-zone" aria-label="Matching targets">
-          <div className="match-grid">
-            {targets.map((pair) => {
-              const isPlaced = placed.has(pair.id);
-              const isHovered = hoveredTargetId === pair.id;
-              return (
-                <button
-                  key={pair.id}
-                  type="button"
-                  className={`match-button target-button ${isPlaced ? "is-placed" : ""} ${isHovered ? "is-hovered" : ""}`}
-                  style={{ "--match-color": COLOR_VALUES[pair.color] } as MatchStyle}
-                  data-target-id={pair.id}
-                  aria-label={`${pairLabel(pair)} target${isPlaced ? ", matched" : ""}`}
-                  disabled={isPlaced || isComplete}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") {
-                      return;
-                    }
-                    event.preventDefault();
-                    if (selectedPairId) {
-                      attemptMatch(selectedPairId, pair.id);
-                    }
-                  }}
-                  onClick={() => {
-                    if (selectedPairId) {
-                      attemptMatch(selectedPairId, pair.id);
-                    }
-                  }}
-                >
-                  <MatchVisual pair={pair} target />
-                </button>
-              );
-            })}
+        <div className="board-canvas">
+          {targets.map((pair) => {
+            const isPlaced = placed.has(pair.id);
+            const isHovered = hoveredTargetId === pair.id;
+            const slot = boardSlots.get(`target:${pair.id}`) ?? 0;
+            return (
+              <button
+                key={`target-${pair.id}`}
+                type="button"
+                className={`board-item slot-${slot} match-button target-button ${isPlaced ? "is-placed" : ""} ${isHovered ? "is-hovered" : ""}`}
+                style={{ "--match-color": COLOR_VALUES[pair.color] } as MatchStyle}
+                data-target-id={pair.id}
+                aria-label={`${pairLabel(pair)} target${isPlaced ? ", matched" : ""}`}
+                disabled={isPlaced || isComplete}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                  }
+                  event.preventDefault();
+                  if (selectedPairId) {
+                    attemptMatch(selectedPairId, pair.id);
+                  }
+                }}
+                onClick={() => {
+                  if (selectedPairId) {
+                    attemptMatch(selectedPairId, pair.id);
+                  }
+                }}
+              >
+                <MatchVisual pair={pair} target />
+              </button>
+            );
+          })}
+
+          {pieces.map((pair) => {
+            const isPlaced = placed.has(pair.id);
+            const isDragging = drag?.pairId === pair.id;
+            const isSelected = selectedPairId === pair.id && !isDragging;
+            const slot = boardSlots.get(`piece:${pair.id}`) ?? 0;
+            const style: MatchStyle = {
+              "--match-color": COLOR_VALUES[pair.color],
+              "--drag-x": isDragging ? `${drag.x}px` : "0px",
+              "--drag-y": isDragging ? `${drag.y}px` : "0px",
+            };
+
+            return (
+              <button
+                key={`piece-${pair.id}`}
+                type="button"
+                className={`board-item slot-${slot} match-button piece-button ${isPlaced ? "is-placed" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""}`}
+                style={style}
+                aria-label={`${pairLabel(pair)}${isSelected ? ", selected" : ""}`}
+                aria-pressed={isSelected}
+                disabled={isPlaced || isComplete}
+                onKeyDown={(event) => selectWithKeyboard(event, pair.id)}
+                onPointerDown={(event) => beginDrag(event, pair.id)}
+                onPointerMove={moveDrag}
+                onPointerUp={(event) => finishDrag(event)}
+                onPointerCancel={(event) => finishDrag(event, true)}
+                onLostPointerCapture={(event) => finishDrag(event, true)}
+              >
+                <MatchVisual pair={pair} />
+              </button>
+            );
+          })}
+        </div>
+
+        {celebration ? (
+          <div
+            key={`${celebration.pair.id}-${celebration.sequence}`}
+            className="match-celebration"
+            aria-hidden="true"
+          >
+            <span
+              className="match-celebration-visual"
+              style={{ "--match-color": COLOR_VALUES[celebration.pair.color] } as MatchStyle}
+            >
+              <MatchVisual pair={celebration.pair} />
+            </span>
           </div>
-        </div>
+        ) : null}
 
-        <div className="board-divider" aria-hidden="true">
-          <span />
-        </div>
-
-        <div className="play-zone piece-zone" aria-label={`${modeCopy.label} to match`}>
-          <div className="match-grid">
-            {pieces.map((pair) => {
-              const isPlaced = placed.has(pair.id);
-              const isDragging = drag?.pairId === pair.id;
-              const isSelected = selectedPairId === pair.id && !isDragging;
-              const style: MatchStyle = {
-                "--match-color": COLOR_VALUES[pair.color],
-                "--drag-x": isDragging ? `${drag.x}px` : "0px",
-                "--drag-y": isDragging ? `${drag.y}px` : "0px",
-              };
-
-              return (
-                <button
-                  key={pair.id}
-                  type="button"
-                  className={`match-button piece-button ${isPlaced ? "is-placed" : ""} ${isDragging ? "is-dragging" : ""} ${isSelected ? "is-selected" : ""}`}
-                  style={style}
-                  aria-label={`${pairLabel(pair)}${isSelected ? ", selected" : ""}`}
-                  aria-pressed={isSelected}
-                  disabled={isPlaced || isComplete}
-                  onKeyDown={(event) => selectWithKeyboard(event, pair.id)}
-                  onPointerDown={(event) => beginDrag(event, pair.id)}
-                  onPointerMove={moveDrag}
-                  onPointerUp={(event) => finishDrag(event)}
-                  onPointerCancel={(event) => finishDrag(event, true)}
-                  onLostPointerCapture={(event) => finishDrag(event, true)}
-                >
-                  <MatchVisual pair={pair} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div
-          className={`level-complete ${isComplete ? "is-visible" : ""}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span aria-hidden="true">✓</span>
-          <span className="visually-hidden">
-            {isComplete ? `Level ${level} complete` : ""}
-          </span>
+        <div className="visually-hidden" role="status" aria-live="polite">
+          {isComplete ? `Level ${level} complete` : ""}
         </div>
       </section>
     </main>

@@ -89,6 +89,13 @@ export interface LevelConfig {
   containerOrder: string[];
 }
 
+export interface RectBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 export interface DragState {
   pairId: string;
   pointerId: number;
@@ -96,6 +103,7 @@ export interface DragState {
   startY: number;
   x: number;
   y: number;
+  visualBounds: RectBounds;
 }
 
 export interface Difficulty {
@@ -140,6 +148,30 @@ export const COLOR_VALUES: Record<ColorId, string> = {
   purple: "#967fc2",
   pink: "#d88fac",
 };
+
+export function getRectOverlapRatio(source: RectBounds, target: RectBounds) {
+  const sourceWidth = Math.max(0, source.right - source.left);
+  const sourceHeight = Math.max(0, source.bottom - source.top);
+  const sourceArea = sourceWidth * sourceHeight;
+  const targetWidth = Math.max(0, target.right - target.left);
+  const targetHeight = Math.max(0, target.bottom - target.top);
+  const comparableArea = Math.min(sourceArea, targetWidth * targetHeight);
+
+  if (comparableArea === 0) {
+    return 0;
+  }
+
+  const overlapWidth = Math.max(
+    0,
+    Math.min(source.right, target.right) - Math.max(source.left, target.left),
+  );
+  const overlapHeight = Math.max(
+    0,
+    Math.min(source.bottom, target.bottom) - Math.max(source.top, target.top),
+  );
+
+  return (overlapWidth * overlapHeight) / comparableArea;
+}
 
 export function getDifficulty(level: number): Difficulty {
   const safeLevel = Math.max(1, Math.floor(level));

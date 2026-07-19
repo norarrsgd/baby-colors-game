@@ -7,9 +7,38 @@ import {
   SHAPES,
   generateLevel,
   getDifficulty,
+  getRectOverlapRatio,
 } from "../app/game-logic.ts";
 
 const MODES = ["letters", "numbers", "shapes"];
+
+test("measures how much of a dragged visual overlaps a target", () => {
+  const source = { left: 0, right: 100, top: 0, bottom: 100 };
+
+  assert.equal(
+    getRectOverlapRatio(source, { left: 100, right: 200, top: 0, bottom: 100 }),
+    0,
+  );
+  assert.equal(
+    getRectOverlapRatio(source, { left: 50, right: 150, top: 50, bottom: 150 }),
+    0.25,
+  );
+  assert.equal(
+    getRectOverlapRatio(source, { left: 0, right: 100, top: 0, bottom: 100 }),
+    1,
+  );
+  assert.equal(
+    getRectOverlapRatio(source, { left: 25, right: 75, top: 25, bottom: 75 }),
+    1,
+  );
+  assert.equal(
+    getRectOverlapRatio(
+      { left: 0, right: 0, top: 0, bottom: 100 },
+      { left: 0, right: 100, top: 0, bottom: 100 },
+    ),
+    0,
+  );
+});
 
 test("uses the planned pair-count tiers and never exceeds five pairs", () => {
   const expectations = new Map([
