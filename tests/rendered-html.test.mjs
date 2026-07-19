@@ -86,6 +86,10 @@ test("keeps every game mode session-only, audio-enabled, and accessible", async 
   assert.match(gameSource, /className="match-celebration"/);
   assert.match(stylesSource, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(stylesSource, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
-  assert.match(stylesSource, /--shape-size: clamp\(108px, 27vw, 171px\)/);
+  assert.match(stylesSource, /--shape-size: clamp\(130px, 32\.4vw, 205px\)/);
+  assert.match(stylesSource, /--shape-size: clamp\(130px, 19\.8vw, 198px\)/);
+  assert.match(stylesSource, /--shape-size: 126px/);
+  assert.match(stylesSource, /\.target-button\.is-placed\s*\{[^}]*opacity: 0\.38/s);
+  assert.match(stylesSource, /\.target-button\.is-placed\s*\{[^}]*saturate\(0\.52\)/s);
   assert.match(stylesSource, /@keyframes answer-zoom/);
 });

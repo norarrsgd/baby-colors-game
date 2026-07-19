@@ -369,14 +369,14 @@ button {
 .slot-9 { grid-column: 2; grid-row: 5; }
 
 .match-button {
-  --shape-size: clamp(99px, 27vw, 171px);
+  --shape-size: clamp(119px, 32.4vw, 205px);
   position: relative;
   display: grid;
   place-items: center;
-  width: max(94px, var(--shape-size));
-  height: max(94px, var(--shape-size));
-  min-width: 94px;
-  min-height: 94px;
+  width: max(113px, var(--shape-size));
+  height: max(113px, var(--shape-size));
+  min-width: 113px;
+  min-height: 113px;
   padding: 0;
   border: 0;
   border-radius: 28%;
@@ -418,12 +418,21 @@ button {
 }
 
 .target-button {
-  transition: transform 180ms ease, filter 180ms ease;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    opacity 180ms ease;
 }
 
 .target-button.is-hovered {
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--match-color) 42%, transparent));
   transform: scale(1.045);
+}
+
+.target-button.is-placed {
+  opacity: 0.38;
+  filter: saturate(0.52);
+  transform: scale(0.94);
 }
 
 .shape-visual {
@@ -436,15 +445,15 @@ button {
 }
 
 .size-small {
-  --shape-size: clamp(90px, 21vw, 123px);
+  --shape-size: clamp(108px, 25.2vw, 148px);
 }
 
 .size-medium {
-  --shape-size: clamp(99px, 24vw, 147px);
+  --shape-size: clamp(119px, 28.8vw, 176px);
 }
 
 .size-large {
-  --shape-size: clamp(108px, 27vw, 171px);
+  --shape-size: clamp(130px, 32.4vw, 205px);
 }
 
 .shape-piece {
@@ -687,19 +696,19 @@ button {
   .slot-9 { grid-column: 5; grid-row: 2; }
 
   .match-button {
-    --shape-size: clamp(99px, 16.5vw, 165px);
+    --shape-size: clamp(119px, 19.8vw, 198px);
   }
 
   .size-small {
-    --shape-size: clamp(90px, 12vw, 117px);
+    --shape-size: clamp(108px, 14.4vw, 140px);
   }
 
   .size-medium {
-    --shape-size: clamp(99px, 14.25vw, 141px);
+    --shape-size: clamp(119px, 17.1vw, 169px);
   }
 
   .size-large {
-    --shape-size: clamp(108px, 16.5vw, 165px);
+    --shape-size: clamp(130px, 19.8vw, 198px);
   }
 }
 
@@ -739,22 +748,22 @@ button {
   }
 
   .match-button {
-    min-width: 90px;
-    min-height: 90px;
-    width: max(90px, var(--shape-size));
-    height: max(90px, var(--shape-size));
+    min-width: 108px;
+    min-height: 108px;
+    width: max(108px, var(--shape-size));
+    height: max(108px, var(--shape-size));
   }
 
   .size-small {
-    --shape-size: 87px;
+    --shape-size: 104px;
   }
 
   .size-medium {
-    --shape-size: 96px;
+    --shape-size: 115px;
   }
 
   .size-large {
-    --shape-size: 105px;
+    --shape-size: 126px;
   }
 }
 
